@@ -4,17 +4,17 @@
 #include <string.h>
 #include <errno.h>
 
-static void msg(const char *msg) {
+void msg(const char *msg) {
   fprintf(stderr, "%s\n", msg);
 }
 
-static void die(const char *msg) {
+void die(const char *msg) {
   int err = errno;
   fprintf(stderr, "[%d] %s\n", err, msg);
   abort();
 }
 
-static int32_t read_full(int fd, char *buf, size_t n) {
+int32_t read_full(int fd, char *buf, size_t n) {
   while (n > 0) {
     ssize_t rv = read(fd, buf, n);
     if (rv <= 0) {
@@ -26,7 +26,7 @@ static int32_t read_full(int fd, char *buf, size_t n) {
   return 0;
 }
 
-static int32_t write_all(int fd, const char *buf, size_t n) {
+int32_t write_all(int fd, const char *buf, size_t n) {
   while (n > 0) {
     ssize_t rv = write(fd, buf, n);
     if (rv <= 0) {
@@ -38,7 +38,7 @@ static int32_t write_all(int fd, const char *buf, size_t n) {
   return 0;
 }
 
-static int32_t one_request(int connfd, uint32_t MAX_MSG_LEN) {
+int32_t one_request(int connfd, uint32_t MAX_MSG_LEN) {
   char rbuf[4 + MAX_MSG_LEN];  // 4 bytes header
   errno = 0;
   int32_t err = 0;
@@ -67,7 +67,7 @@ static int32_t one_request(int connfd, uint32_t MAX_MSG_LEN) {
   return write_all(connfd, wbuf, 4 + msg_len);
 }
 
-static int32_t query(int fd, const char *text, uint32_t MAX_MSG_LEN) {
+int32_t query(int fd, const char *text, uint32_t MAX_MSG_LEN) {
   uint32_t msg_len = (uint32_t) strlen(text);
   int32_t err = 0;
   if (msg_len > MAX_MSG_LEN) {
