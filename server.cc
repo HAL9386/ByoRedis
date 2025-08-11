@@ -10,6 +10,7 @@
 #include <poll.h>
 
 #include "common.hh"
+#include "server_conn.hh"
 #include <assert.h>
 
 int main() {
@@ -21,13 +22,10 @@ int main() {
   int val = 1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
   // bind
-  struct sockaddr_in addr = {
-    .sin_family = AF_INET,
-    .sin_port = ntohs(1234),
-    .sin_addr = {
-      .s_addr = ntohl(0),
-    },
-  };
+  struct sockaddr_in addr = {};
+  addr.sin_family = AF_INET;
+  addr.sin_port = ntohs(1234);
+  addr.sin_addr.s_addr = ntohl(0);
   int rv = bind(fd, (struct sockaddr const *)&addr, sizeof(addr));
   if (rv) {
     die("bind()");

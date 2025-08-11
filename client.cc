@@ -10,19 +10,17 @@
 #include <string>
 
 #include "common.hh"
+#include "client_api.hh"
 
 int main() {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     die("socket()");
   }
-  struct sockaddr_in addr = {
-    .sin_family = AF_INET,
-    .sin_port = ntohs(1234),
-    .sin_addr = {
-      .s_addr = ntohl(INADDR_LOOPBACK),  // connect to localhost
-    },
-  };
+  struct sockaddr_in addr = {};
+  addr.sin_family = AF_INET;
+  addr.sin_port = ntohs(1234);
+  addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK);  // connect to localhost
   int rv = connect(fd, (struct sockaddr const *)&addr, sizeof(addr));
   if (rv) {
     die("connect()");
