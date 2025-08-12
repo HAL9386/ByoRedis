@@ -2,11 +2,13 @@
 #define COMMON_HH
 
 #include <vector>
+#include <string>
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
 
-size_t const k_max_msg = 32 << 20;
+size_t const k_max_msg  = 32 << 20;
+size_t const k_max_args = 200 * 1000;
 
 struct Buffer {
   std::vector<uint8_t> buf;
@@ -81,7 +83,10 @@ void die(const char *msg);
 void fd_set_nb(int fd);
 void buf_append(std::vector<uint8_t> &buf, uint8_t const *data, size_t len);
 void buf_consume(std::vector<uint8_t> &buf, size_t len);
-int32_t read_full(int fd, uint8_t *buf, size_t n);
-int32_t write_all(int fd, uint8_t const *buf, size_t n);
+
+// read 4 bytes as uint32_t, and move cur forward by 4
+bool read_u32(uint8_t const *&cur, uint8_t const *end, uint32_t &out);
+// read n bytes as string, and move cur forward by n
+bool read_str(uint8_t const *&cur, uint8_t const *end, size_t n, std::string &out);
 
 #endif

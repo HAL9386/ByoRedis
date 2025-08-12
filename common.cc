@@ -1,12 +1,12 @@
 #include "common.hh"
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <string>
 
 void msg(char const *msg) { fprintf(stderr, "%s\n", msg); }
 
@@ -45,28 +45,20 @@ void buf_consume(std::vector<uint8_t> &buf, size_t len) {
   buf.erase(buf.begin(), buf.begin() + len);
 }
 
-int32_t read_full(int fd, uint8_t *buf, size_t n) {
-  while (n > 0) {
-    ssize_t rv = read(fd, buf, n);
-    if (rv <= 0) {
-      return -1;  // error, or unexpected EOF
-    }
-    assert((size_t)rv <= n);
-    n -= (size_t)rv;
-    buf += rv;
+bool read_u32(uint8_t const *&cur, uint8_t const *end, uint32_t &out) {
+  if (cur + 4 > end) {
+    return false;
   }
-  return 0;
+  memcpy(&out, cur, 4);
+  cur += 4;
+  return true;
 }
 
-int32_t write_all(int fd, uint8_t const *buf, size_t n) {
-  while (n > 0) {
-    ssize_t rv = write(fd, buf, n);
-    if (rv <= 0) {
-      return -1;  // error
-    }
-    assert((size_t)rv <= n);
-    n -= (size_t)rv;
-    buf += rv;
+bool read_str(uint8_t const *&cur, uint8_t const *end, size_t n, std::string &out) {
+  if (cur + n > end) {
+    return false;
   }
-  return 0;
+  out.assign(cur, cur + n);
+  cur += n;
+  return true;
 }

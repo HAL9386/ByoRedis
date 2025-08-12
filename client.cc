@@ -12,7 +12,7 @@
 #include "common.hh"
 #include "client_api.hh"
 
-int main() {
+int main(int argc, char **argv) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     die("socket()");
@@ -25,24 +25,17 @@ int main() {
   if (rv) {
     die("connect()");
   }
-  // multiple pipelined requests
-  std::vector<std::string> query_list = {
-    "hello1", "hello2", "hello3",
-    // a large message requires multiple event loop iterations
-    std::string(k_max_msg, 'z'),
-    "hello5",
-  };
-  for (std::string const &s : query_list) {
-    int32_t err = send_req(fd, (uint8_t *)s.data(), s.size());
-    if (err) {
-      goto L_DONE;
-    }
+  std::vector<std::string> cmd;
+  for (int i = 1; i < argc; i++) {
+    cmd.push_back(argv[i]);
   }
-  for (size_t i = 0; i < query_list.size(); i++) {
-    int32_t err = read_res(fd);
-    if (err) {
-      goto L_DONE;
-    }
+  int32_t err = send_req(fd, cmd);
+  if (err) {
+    goto L_DONE;
+  }
+  err = read_res(fd);
+  if (err) {
+    goto L_DONE;
   }
 L_DONE:
   close(fd);

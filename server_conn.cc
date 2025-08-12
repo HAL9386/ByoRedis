@@ -43,7 +43,7 @@ bool try_process_one_request(Conn *conn) {
   if (len > k_max_msg) {
     die("request too large");
     conn->want_close = true;
-    return false;
+    return false;  // want close
   }
   // message body
   if (4 + len > conn->incoming.readable_size()) {
@@ -51,11 +51,13 @@ bool try_process_one_request(Conn *conn) {
   }
   uint8_t const *request = conn->incoming.readable_data() + 4;
   // got some request, do some application logic
-  printf("client says: len:%d data:%.*s\n",
-    len, len < 100 ? len : 100, request);
-  // generate the response
-  conn->outgoing.append((uint8_t const *)&len, 4);
-  conn->outgoing.append(request, len);
+  std::vector<std::string> cmd;
+  if (parse_req(request, len, cmd) < 0) {
+    msg("bad request");
+    conn->want_close = true;
+    return false;  // want close
+  }
+  do_request_and_make_response(cmd, conn->outgoing);
   // application logic done, remove the request from the incoming buffer
   conn->incoming.consume(4 + len);
   return true;
@@ -127,4 +129,55 @@ void handle_read(Conn *conn) {
     // try to write it without waiting for the next iteration.
     return handle_write(conn);
   } // else: want read
+}
+
+int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &out) {
+  uint8_t const *end = data + size;
+  uint32_t nstr = 0;
+  if (!read_u32(data, end, nstr)) {
+    return -1;
+  }
+  if (nstr > k_max_args) {
+    return -1;
+  }
+  while (out.size() < nstr) {
+    uint32_t len = 0;
+    if (!read_u32(data, end, len)) {
+      return -1;
+    }
+    out.push_back(std::string());
+    if (!read_str(data, end, len, out.back())) {
+      return -1;
+    }
+  }
+  if (data != end) {
+    return -1;  // trailing garbage
+  }
+  return 0;
+}
+
+static void make_response(Buffer &buf, uint32_t status, uint8_t const *resp_data, size_t data_size) {
+  uint32_t resp_len = 4 + data_size;          // status_len + resp_data_len
+  buf.append((uint8_t const *)&resp_len, 4);  // header
+  buf.append((uint8_t const*)&status, 4);     // payload: status
+  buf.append(resp_data, data_size);           // payload: resp_data
+}
+
+void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer) {
+  if (cmd[0] == "get" && cmd.size() == 2) {
+    auto it = g_data.find(cmd[1]);
+    if (it == g_data.end()) {
+      make_response(buffer, RES_NX, {}, 0);  // not found
+      return;
+    }
+    make_response(buffer, RES_OK, (uint8_t const *)it->second.data(), it->second.size());
+  } else if (cmd[0] == "set" && cmd.size() == 3) {
+    g_data[cmd[1]].swap(cmd[2]);
+    make_response(buffer, RES_OK, {}, 0);
+  } else if (cmd[0] == "del" && cmd.size() == 2) {
+    g_data.erase(cmd[1]);
+    make_response(buffer, RES_OK, {}, 0);
+  } else {
+    make_response(buffer, RES_ERR, {}, 0);  // unrecognized command
+  }
 }

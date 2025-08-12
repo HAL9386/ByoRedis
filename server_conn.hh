@@ -2,7 +2,27 @@
 #define SERVER_CONN_HH
 #include <stdint.h>
 #include <vector>
+#include <string>
+#include <map>
 #include "common.hh"
+
+// Response::status
+enum {
+  RES_OK  = 0,  // success
+  RES_ERR = 1,  // error
+  RES_NX  = 2,  // key not found
+};
+
+// +--------|---------+
+// | status | data... |
+// +--------|---------+
+struct Response {
+  uint32_t status = 0;
+  std::vector<uint8_t> data;
+};
+
+// placeholder; implemented later
+static std::map<std::string, std::string> g_data;
 
 struct Conn {
   int fd = -1;
@@ -20,5 +40,12 @@ Conn *handle_accept(int fd);
 bool try_process_one_request(Conn *conn);
 void handle_write(Conn *conn);
 void handle_read(Conn *conn);
+
+// +------|-----|------|-----|------|-----|-----|------+
+// | nstr | len | str1 | len | str2 | ... | len | strn |
+// +------|-----|------|-----|------|-----|-----|------+
+
+int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &out);
+void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer);
 
 #endif
