@@ -35,36 +35,36 @@ Conn *handle_accept(int fd) {
 // process 1 request if there is enough data in the incoming buffer
 bool try_process_one_request(Conn *conn) {
   // try to parse the protocol: message header
-  if (conn->incoming.size() < 4) {
+  if (conn->incoming.readable_size() < 4) {
     return false;  // want read
   }
   uint32_t len = 0;
-  memcpy(&len, conn->incoming.data(), 4);
+  memcpy(&len, conn->incoming.readable_data(), 4);
   if (len > k_max_msg) {
     die("request too large");
     conn->want_close = true;
     return false;
   }
   // message body
-  if (4 + len > conn->incoming.size()) {
+  if (4 + len > conn->incoming.readable_size()) {
     return false;  // want read
   }
-  uint8_t const *request = &conn->incoming[4];
+  uint8_t const *request = conn->incoming.readable_data() + 4;
   // got some request, do some application logic
   printf("client says: len:%d data:%.*s\n",
     len, len < 100 ? len : 100, request);
   // generate the response
-  buf_append(conn->outgoing, (uint8_t const *)&len, 4);
-  buf_append(conn->outgoing, request, len);
+  conn->outgoing.append((uint8_t const *)&len, 4);
+  conn->outgoing.append(request, len);
   // application logic done, remove the request from the incoming buffer
-  buf_consume(conn->incoming, 4 + len);
+  conn->incoming.consume(4 + len);
   return true;
 }
 
 // application callback when the socket is writable
 void handle_write(Conn *conn) {
-  assert(conn->outgoing.size() > 0);
-  ssize_t rv = write(conn->fd, &conn->outgoing[0], conn->outgoing.size());
+  assert(conn->outgoing.readable_size() > 0);
+  ssize_t rv = write(conn->fd, conn->outgoing.readable_data(), conn->outgoing.readable_size());
   if (rv < 0 && errno == EAGAIN) {
     return;  // actually not ready
   }
@@ -74,11 +74,12 @@ void handle_write(Conn *conn) {
     return;
   }
   // remove written data from outgoing
-  buf_consume(conn->outgoing, (size_t)rv);
+  conn->outgoing.consume((size_t)rv);
   // update the readiness intention
-  if (conn->outgoing.empty()) {  // all data written
+  if (conn->outgoing.readable_size() == 0) {  // all data written
     conn->want_write = false;
     conn->want_read = true;
+    conn->outgoing.shrink_if_wasteful(1u << 20);
   } // else: want write
 }
 
@@ -98,7 +99,7 @@ void handle_read(Conn *conn) {
   }
   // handle EOF
   if (rv == 0) {
-    if (conn->incoming.size() == 0) {
+    if (conn->incoming.readable_size() == 0) {
       msg("client closed");
     } else {
       msg("unexpected EOF");
@@ -107,11 +108,19 @@ void handle_read(Conn *conn) {
     return;  // want close
   }
   // got some new data
-  buf_append(conn->incoming, buf, (size_t)rv);
+  conn->incoming.append(buf, (size_t)rv);
   // parse requests and generate responses
   while (try_process_one_request(conn)) {}
+  size_t unread = conn->incoming.readable_size();
+  if (unread == 0) {
+    conn->incoming.shrink_if_wasteful();
+  } else if (conn->incoming.capacity() > (1u << 20)        // > 1MB
+             && unread < (conn->incoming.capacity() >> 3)  // < 1/8
+             && unread < 4096) {
+    conn->incoming.shrink_if_wasteful();
+  }
   // update the readiness intention
-  if (conn->outgoing.size() > 0) {  // has a response
+  if (conn->outgoing.readable_size() > 0) {  // has a response
     conn->want_read = false;
     conn->want_write = true;
     // The socket is likely ready to write in a request-response protocol,
