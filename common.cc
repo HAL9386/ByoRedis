@@ -9,11 +9,14 @@
 #include <unistd.h>
 
 void msg(char const *msg) { fprintf(stderr, "%s\n", msg); }
+
 void msg_errno(char const *msg) { fprintf(stderr, "[%d] %s\n", errno, msg); }
+
 void die(char const *msg) {
   fprintf(stderr, "[%d] %s\n", errno, msg);
   abort();
 }
+
 void fd_set_nb(int fd) {
   errno = 0;
   int flags = fcntl(fd, F_GETFL, 0);
@@ -28,10 +31,12 @@ void fd_set_nb(int fd) {
     die("fcntl F_SETFL error");
   }
 }
+
 // append to the back
 void buf_append(std::vector<uint8_t> &buf, uint8_t const *data, size_t len) {
   buf.insert(buf.end(), data, data + len);
 }
+
 // remove from the front
 void buf_consume(std::vector<uint8_t> &buf, size_t len) {
   if (len > buf.size()) {
@@ -52,6 +57,7 @@ int32_t read_full(int fd, uint8_t *buf, size_t n) {
   }
   return 0;
 }
+
 int32_t write_all(int fd, uint8_t const *buf, size_t n) {
   while (n > 0) {
     ssize_t rv = write(fd, buf, n);
