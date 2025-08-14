@@ -22,4 +22,18 @@ struct HTab {
   size_t size = 0;     // number of keys
 };
 
+// the resizable HMap is based on the fixed-size HTab,
+// contains 2 of them for the progressive rehashing.
+struct HMap {
+  HTab newer;
+  HTab older;
+  size_t migrate_pos = 0;
+};
+
+HNode * hm_lookup(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
+void    hm_insert(HMap *hmap, HNode *node);
+HNode * hm_delete(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
+void    hm_clear(HMap *hmap);
+size_t  hm_size(HMap *hmap);
+
 #endif  // HASH_TABLE_HH
