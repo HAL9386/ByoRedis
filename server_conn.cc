@@ -8,6 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 
+GlobalData g_data;
+
 // application callback when the listening socket is ready
 Conn *handle_accept(int fd) {
   // accept
@@ -163,21 +165,85 @@ static void make_response(Buffer &buf, uint32_t status, uint8_t const *resp_data
   buf.append(resp_data, data_size);           // payload: resp_data
 }
 
+static void do_get(std::vector<std::string> &cmd, Buffer &buffer);
+static void do_set(std::vector<std::string> &cmd, Buffer &buffer);
+static void do_del(std::vector<std::string> &cmd, Buffer &buffer);
+
 void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer) {
   if (cmd[0] == "get" && cmd.size() == 2) {
-    auto it = g_data.find(cmd[1]);
-    if (it == g_data.end()) {
-      make_response(buffer, RES_NX, {}, 0);  // not found
-      return;
-    }
-    make_response(buffer, RES_OK, (uint8_t const *)it->second.data(), it->second.size());
+    do_get(cmd, buffer);
   } else if (cmd[0] == "set" && cmd.size() == 3) {
-    g_data[cmd[1]].swap(cmd[2]);
-    make_response(buffer, RES_OK, {}, 0);
+    do_set(cmd, buffer);
   } else if (cmd[0] == "del" && cmd.size() == 2) {
-    g_data.erase(cmd[1]);
-    make_response(buffer, RES_OK, {}, 0);
+    do_del(cmd, buffer);
   } else {
     make_response(buffer, RES_ERR, {}, 0);  // unrecognized command
   }
+}
+
+// equality comparison for `struct Entry`
+// static bool entry_eq(HNode *lhs, HNode *rhs) {
+//   struct Entry *le = container_of(lhs, struct Entry, node);
+//   struct Entry *re = container_of(rhs, struct Entry, node);
+//   return le->key == re->key;
+// }
+
+// equality comparison for `struct Entry` and `struct LookupKey`
+static bool key_eq(HNode *lhs, HNode *rhs) {
+  struct Entry *le     = container_of(lhs, struct Entry, node);
+  struct LookupKey *rk = container_of(rhs, struct LookupKey, node);
+  return le->key == rk->key;
+}
+
+// FNV hash
+static uint64_t str_hash(uint8_t const *data, size_t len) {
+  uint32_t h = 0x811C9DC5;
+  for (size_t i = 0; i < len; i++) {
+    h = (h + data[i]) * 0x1000193;
+  }
+  return h;
+}
+
+static void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
+  LookupKey key;
+  key.key.swap(cmd[1]);
+  key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
+  HNode *node = hm_lookup(&g_data.db, &key.node, &key_eq);
+  if (!node) {
+    make_response(buffer, RES_NX, {}, 0);  // not found
+    return;
+  }
+  struct Entry *e = container_of(node, struct Entry, node);
+  make_response(buffer, RES_OK, (uint8_t const *)e->val.data(), e->val.size());
+}
+
+static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
+  LookupKey key;
+  key.key.swap(cmd[1]);
+  key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
+  HNode *node = hm_lookup(&g_data.db, &key.node, &key_eq);
+  if (node) {
+    // found, update the value
+    container_of(node, struct Entry, node)->val.swap(cmd[2]);
+    make_response(buffer, RES_OK, {}, 0);
+  } else {
+    // not found, allocate & insert a new pair
+    Entry *ent = new Entry();
+    ent->key.swap(key.key);
+    ent->val.swap(cmd[2]);
+    ent->node.hcode = key.node.hcode;
+    hm_insert(&g_data.db, &ent->node);
+    make_response(buffer, RES_OK, {}, 0);
+  }
+}
+
+static void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
+  LookupKey key;
+  key.key.swap(cmd[1]);
+  key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
+  HNode *node = hm_delete(&g_data.db, &key.node, &key_eq);
+  if (node) {  // deallocate the pair if found
+    delete container_of(node, struct Entry, node);
+  }
+  make_response(buffer, RES_OK, {}, 0);
 }

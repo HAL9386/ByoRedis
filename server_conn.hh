@@ -1,10 +1,32 @@
 #ifndef SERVER_CONN_HH
 #define SERVER_CONN_HH
 #include <stdint.h>
+#include <stdlib.h>
 #include <vector>
 #include <string>
 #include <map>
 #include "common.hh"
+#include "hashtable.hh"
+
+#define container_of(ptr, T, member) \
+  ((T *)( (char *)ptr - offsetof(T, member) ))
+
+struct GlobalData {
+  HMap db;  // top-level hashtable
+};
+extern GlobalData g_data;
+
+// KV pair for the top-level hashtable
+struct Entry {
+  struct HNode node;  // hashtable node
+  std::string key;
+  std::string val; 
+};
+
+struct LookupKey {  // for lookup only
+  HNode node;
+  std::string key;
+};
 
 // Response::status
 enum {
@@ -20,9 +42,6 @@ struct Response {
   uint32_t status = 0;
   std::vector<uint8_t> data;
 };
-
-// placeholder; implemented later
-static std::map<std::string, std::string> g_data;
 
 struct Conn {
   int fd = -1;

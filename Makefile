@@ -31,11 +31,11 @@ BUILDDIR := build
 BINDIR   := bin
 
 # Sources
-SRCS := common.cc client.cc server.cc server_conn.cc client_api.cc
+SRCS := common.cc client.cc server.cc server_conn.cc client_api.cc hashtable.cc
 OBJS := $(SRCS:%.cc=$(BUILDDIR)/%.o)
 DEPS := $(OBJS:.o=.d)
 
-SERVER_OBJS := $(BUILDDIR)/server.o $(BUILDDIR)/common.o $(BUILDDIR)/server_conn.o
+SERVER_OBJS := $(BUILDDIR)/server.o $(BUILDDIR)/common.o $(BUILDDIR)/server_conn.o $(BUILDDIR)/hashtable.o
 CLIENT_OBJS := $(BUILDDIR)/client.o $(BUILDDIR)/common.o $(BUILDDIR)/client_api.o
 
 # Default goal
