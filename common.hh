@@ -76,13 +76,17 @@ struct Buffer {
   }
 };
 
+void buf_append_u8(Buffer &buf, uint8_t data);
+void buf_append_u32(Buffer &buf, uint32_t data);
+void buf_append_i64(Buffer &buf, int64_t data);
+void buf_append_dbl(Buffer &buf, double data);
+void buf_append_str(Buffer &buf, uint8_t const *data, size_t len);
+
 // Shared utilities
 void msg(const char *msg);
 void msg_errno(char const *msg);
 void die(const char *msg);
 void fd_set_nb(int fd);
-void buf_append(std::vector<uint8_t> &buf, uint8_t const *data, size_t len);
-void buf_consume(std::vector<uint8_t> &buf, size_t len);
 
 // read 4 bytes as uint32_t, and move cur forward by 4
 bool read_u32(uint8_t const *&cur, uint8_t const *end, uint32_t &out);

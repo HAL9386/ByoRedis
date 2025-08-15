@@ -29,10 +29,33 @@ struct LookupKey {  // for lookup only
 };
 
 // Response::status
-enum {
+enum RESPONSE_STATUS {
   RES_OK  = 0,  // success
   RES_ERR = 1,  // error
   RES_NX  = 2,  // key not found
+};
+
+// Tag-Length-Value (TLV) encoding
+//  nil     int64           str                 array
+// +-----+  +-----+-----+  +-----+-----+-----+  +-----+-----+-----+
+// | tag |  | tag | int |  | tag | len | val |  | tag | len | ... |
+// +-----+  +-----+-----+  +-----+-----+-----+  +-----+-----+-----+
+//   1B        1B    8B      1B    4B    ...       1B    4B   ...
+
+// data types of serialized data
+enum TAG {
+  TAG_NIL = 0,  // nil
+  TAG_ERR = 1,  // error code + msg
+  TAG_STR = 2,  // string
+  TAG_INT = 3,  // int64
+  TAG_DBL = 4,  // double
+  TAG_ARR = 5,  // array
+};
+
+// error code for TAG_ERR
+enum TAG_ERR_CODE {
+  ERR_UNKNOWN = 1,  // unknown command
+  ERR_TOO_BIG = 2,  // response too big
 };
 
 // +--------|---------+

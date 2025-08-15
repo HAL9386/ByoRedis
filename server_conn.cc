@@ -204,17 +204,36 @@ static uint64_t str_hash(uint8_t const *data, size_t len) {
   return h;
 }
 
+static void out_nil(Buffer &buf) {
+  buf_append_u8(buf, TAG_NIL);
+}
+
+static void out_str(Buffer &buf, char const *s, size_t size) {
+  buf_append_u8(buf, TAG_STR);                    // tag
+  buf_append_u32(buf, (uint32_t)size);            // len
+  buf_append_str(buf, (uint8_t const *)s, size);  // val
+}
+
+static void out_int(Buffer &buf, int64_t val) {
+  buf_append_u8(buf, TAG_INT);
+  buf_append_i64(buf, val);
+}
+
+static void out_arr(Buffer &buf, uint32_t n) {
+  buf_append_u8(buf, TAG_ARR);
+  buf_append_u32(buf, n);
+}
+
 static void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
   HNode *node = hm_lookup(&g_data.db, &key.node, &key_eq);
   if (!node) {
-    make_response(buffer, RES_NX, {}, 0);  // not found
-    return;
+    return out_nil(buffer);
   }
-  struct Entry *e = container_of(node, struct Entry, node);
-  make_response(buffer, RES_OK, (uint8_t const *)e->val.data(), e->val.size());
+  std::string const &val = container_of(node, struct Entry, node)->val;
+  return out_str(buffer, val.data(), val.size());
 }
 
 static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
@@ -225,7 +244,6 @@ static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
   if (node) {
     // found, update the value
     container_of(node, struct Entry, node)->val.swap(cmd[2]);
-    make_response(buffer, RES_OK, {}, 0);
   } else {
     // not found, allocate & insert a new pair
     Entry *ent = new Entry();
@@ -233,8 +251,8 @@ static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
     ent->val.swap(cmd[2]);
     ent->node.hcode = key.node.hcode;
     hm_insert(&g_data.db, &ent->node);
-    make_response(buffer, RES_OK, {}, 0);
   }
+  return out_nil(buffer);
 }
 
 static void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
@@ -245,5 +263,5 @@ static void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
   if (node) {  // deallocate the pair if found
     delete container_of(node, struct Entry, node);
   }
-  make_response(buffer, RES_OK, {}, 0);
+  return out_int(buffer, node ? 1 : 0);  // the number of deleted keys
 }
