@@ -193,12 +193,14 @@ int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &ou
 // }
 
 void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer) {
-  if (cmd[0] == "get" && cmd.size() == 2) {
+  if (cmd.size() == 2 && cmd[0] == "get") {
     return do_get(cmd, buffer);
-  } else if (cmd[0] == "set" && cmd.size() == 3) {
+  } else if (cmd.size() == 3 && cmd[0] == "set") {
     return do_set(cmd, buffer);
-  } else if (cmd[0] == "del" && cmd.size() == 2) {
+  } else if (cmd.size() == 2 && cmd[0] == "del") {
     return do_del(cmd, buffer);
+  } else if (cmd.size() == 1 && cmd[0] == "keys") {
+    return do_keys(cmd, buffer);
   } else {
     return out_err(buffer, ERR_UNKNOWN, "unknown command");
   }
@@ -299,4 +301,16 @@ void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
     delete container_of(node, struct Entry, node);
   }
   return out_int(buffer, node ? 1 : 0);  // the number of deleted keys
+}
+
+static bool cb_keys(HNode *node, void *arg) {
+  Buffer &buf = *(Buffer *)arg;
+  std::string const &key = container_of(node, struct Entry, node)->key;
+  out_str(buf, key.data(), key.size()); 
+  return true;
+}
+
+void do_keys(std::vector<std::string> &, Buffer &buffer) {
+  out_arr(buffer, (uint32_t)hm_size(&g_data.db));
+  hm_foreach(&g_data.db, &cb_keys, (void *)&buffer);
 }

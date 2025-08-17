@@ -93,5 +93,6 @@ void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer)
 void do_get(std::vector<std::string> &cmd, Buffer &buffer);
 void do_set(std::vector<std::string> &cmd, Buffer &buffer);
 void do_del(std::vector<std::string> &cmd, Buffer &buffer);
+void do_keys(std::vector<std::string> &cmd, Buffer &buffer);
 
 #endif
