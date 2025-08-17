@@ -1,5 +1,6 @@
 #include "client_api.hh"
 #include "common.hh"
+#include "server_conn.hh"
 
 #include <vector>
 #include <string.h>
@@ -14,7 +15,7 @@
 
 int32_t send_req(int fd, std::vector<std::string> const &cmd) {
   // calculate the total payload size
-  size_t payload_size = 4;  // for nstr
+  uint32_t payload_size = 4;  // for nstr
   for (std::string const &s : cmd) {
     payload_size += 4 + s.size();  // for len + str
   }
@@ -68,19 +69,13 @@ int32_t read_res(int fd) {
     msg("read_res error");
     return err;
   }
-  // Response from server(aka payload)
-  // +--------|---------+
-  // | status | data... |
-  // +--------|---------+
   // print the result
-  uint32_t rescode = 0;
-  if (len < 4) {
-    msg("bad response");  // not enough for a status
+  int32_t rv = print_response((uint8_t *)&rbuf[4], len);
+  if (rv > 0 && (uint32_t)rv != len) {
+    msg("print_response: incomplete data");
     return -1;
   }
-  memcpy(&rescode, &rbuf[4], 4);
-  printf("server says: [%u] %.*s\n", rescode, len - 4, &rbuf[8]);
-  return 0;
+  return rv;
 }
 
 int32_t read_full(int fd, char *buf, size_t n) {
@@ -107,4 +102,94 @@ int32_t write_all(int fd, char const *buf, size_t n) {
     buf += rv;
   }
   return 0;
+}
+
+int32_t print_response(uint8_t const *data, size_t size) {
+  if (size < 1) {
+    msg("empty response");
+    return -1;
+  }
+  switch (data[0]) {
+  case TAG_NIL:
+    printf("(nil)\n");
+    return 1;
+  case TAG_ERR:
+    if (size < 1 + 8) {
+      msg("bad error response");
+      return -1;
+    }
+    {
+      int32_t code = 0;
+      uint32_t len = 0;
+      memcpy(&code, &data[1], 4);     // error code, skip 1 byte(tag)
+      memcpy(&len, &data[1 + 4], 4);  // error message len
+      if (size < 1 + 8 + len) {
+        msg("bad error response");
+        return -1;
+      }
+      printf("(err) %d %.*s\n", code, len, &data[1 + 8]);
+      return 1 + 8 + len;
+    }
+  case TAG_STR:
+    if (size < 1 + 4) {
+      msg("bad string response");
+      return -1;
+    }
+    {
+      uint32_t len = 0;
+      memcpy(&len, &data[1], 4);  // string len
+      if (size < 1 + 4 + len) {
+        msg("bad string response");
+        return -1;
+      }
+      printf("(str) %.*s\n", len, &data[1 + 4]);
+      return 1 + 4 + len;
+    }
+  case TAG_INT:
+    if (size < 1 + 8) {
+      msg("bad int response");
+      return -1;
+    }
+    {
+      int64_t val = 0;
+      memcpy(&val, &data[1], 8);
+      printf("(int) %ld\n", val);
+      return 1 + 8;
+    }
+  case TAG_DBL:
+    if (size < 1 + 8) {
+      msg("bad dbl response");
+      return -1;
+    }
+    {
+      double val = 0.0;
+      memcpy(&val, &data[1], 8);
+      printf("(dbl) %g\n", val);
+      return 1 + 8;
+    }
+  case TAG_ARR:
+    if (size < 1 + 4) {
+      msg("bad array response");
+      return -1;
+    }
+    {
+      uint32_t len = 0;
+      memcpy(&len, &data[1], 4);  // array len
+      printf("(arr) len=%u\n", len);
+      size_t arr_bytes = 1 + 4;  // 1 byte(tag) + 4 byte(len)
+      for (uint32_t i = 0; i < len; i++) {
+        int32_t rv = print_response(&data[arr_bytes], size - arr_bytes);
+        if (rv < 0) {
+          msg("bad array response");
+          return rv;
+        }
+        arr_bytes += (size_t)rv;
+      }
+      printf("(arr) end\n");
+      return (int32_t)arr_bytes;
+    }
+  default:
+    msg("unknown response tag");
+    return -1;
+  }
 }

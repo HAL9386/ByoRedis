@@ -90,4 +90,8 @@ void handle_read(Conn *conn);
 int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &out);
 void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer);
 
+void do_get(std::vector<std::string> &cmd, Buffer &buffer);
+void do_set(std::vector<std::string> &cmd, Buffer &buffer);
+void do_del(std::vector<std::string> &cmd, Buffer &buffer);
+
 #endif

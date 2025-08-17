@@ -34,6 +34,26 @@ Conn *handle_accept(int fd) {
   return conn;
 }
 
+static void response_begin(Buffer &buf) {
+  buf.message_begin();
+}
+
+static size_t response_size(Buffer &buf) {
+  return buf.message_size();
+}
+
+static void response_end(Buffer &buf) {
+  size_t msg_size = response_size(buf);
+  if (msg_size > k_max_msg) {
+    // rollback payload to just after header placeholder
+    buf.writable_begin = buf.inflight_header_pos + 4;
+    out_err(buf, ERR_TOO_BIG, "response too big");
+    msg_size = response_size(buf);
+  }
+  uint32_t len = (uint32_t)msg_size; 
+  buf.message_end(len);
+}
+
 // process 1 request if there is enough data in the incoming buffer
 bool try_process_one_request(Conn *conn) {
   // try to parse the protocol: message header
@@ -59,7 +79,9 @@ bool try_process_one_request(Conn *conn) {
     conn->want_close = true;
     return false;  // want close
   }
+  response_begin(conn->outgoing);
   do_request_and_make_response(cmd, conn->outgoing);
+  response_end(conn->outgoing);
   // application logic done, remove the request from the incoming buffer
   conn->incoming.consume(4 + len);
   return true;
@@ -133,6 +155,11 @@ void handle_read(Conn *conn) {
   } // else: want read
 }
 
+// payload
+// +------|-----|------|-----|------|-----|-----|------+
+// | nstr | len | str1 | len | str2 | ... | len | strn |
+// +------|-----|------|-----|------|-----|-----|------+
+
 int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &out) {
   uint8_t const *end = data + size;
   uint32_t nstr = 0;
@@ -158,26 +185,22 @@ int32_t parse_req(uint8_t const *data, size_t size, std::vector<std::string> &ou
   return 0;
 }
 
-static void make_response(Buffer &buf, uint32_t status, uint8_t const *resp_data, size_t data_size) {
-  uint32_t resp_len = 4 + data_size;          // status_len + resp_data_len
-  buf.append((uint8_t const *)&resp_len, 4);  // header
-  buf.append((uint8_t const*)&status, 4);     // payload: status
-  buf.append(resp_data, data_size);           // payload: resp_data
-}
-
-static void do_get(std::vector<std::string> &cmd, Buffer &buffer);
-static void do_set(std::vector<std::string> &cmd, Buffer &buffer);
-static void do_del(std::vector<std::string> &cmd, Buffer &buffer);
+// static void make_response(Buffer &buf, uint32_t status, uint8_t const *resp_data, size_t data_size) {
+//   uint32_t resp_len = 4 + data_size;          // status_len + resp_data_len
+//   buf.append((uint8_t const *)&resp_len, 4);  // header
+//   buf.append((uint8_t const*)&status, 4);     // payload: status
+//   buf.append(resp_data, data_size);           // payload: resp_data
+// }
 
 void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer) {
   if (cmd[0] == "get" && cmd.size() == 2) {
-    do_get(cmd, buffer);
+    return do_get(cmd, buffer);
   } else if (cmd[0] == "set" && cmd.size() == 3) {
-    do_set(cmd, buffer);
+    return do_set(cmd, buffer);
   } else if (cmd[0] == "del" && cmd.size() == 2) {
-    do_del(cmd, buffer);
+    return do_del(cmd, buffer);
   } else {
-    make_response(buffer, RES_ERR, {}, 0);  // unrecognized command
+    return out_err(buffer, ERR_UNKNOWN, "unknown command");
   }
 }
 
@@ -204,27 +227,39 @@ static uint64_t str_hash(uint8_t const *data, size_t len) {
   return h;
 }
 
-static void out_nil(Buffer &buf) {
+void out_nil(Buffer &buf) {
   buf_append_u8(buf, TAG_NIL);
 }
 
-static void out_str(Buffer &buf, char const *s, size_t size) {
+void out_str(Buffer &buf, char const *s, size_t size) {
   buf_append_u8(buf, TAG_STR);                    // tag
   buf_append_u32(buf, (uint32_t)size);            // len
   buf_append_str(buf, (uint8_t const *)s, size);  // val
 }
 
-static void out_int(Buffer &buf, int64_t val) {
+void out_int(Buffer &buf, int64_t val) {
   buf_append_u8(buf, TAG_INT);
   buf_append_i64(buf, val);
 }
 
-static void out_arr(Buffer &buf, uint32_t n) {
+void out_dbl(Buffer &buf, double val) {
+  buf_append_u8(buf, TAG_DBL);
+  buf_append_dbl(buf, val);
+}
+
+void out_arr(Buffer &buf, uint32_t n) {
   buf_append_u8(buf, TAG_ARR);
   buf_append_u32(buf, n);
 }
 
-static void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
+void out_err(Buffer &buf, uint32_t code, std::string const &msg) {
+  buf_append_u8(buf, TAG_ERR);
+  buf_append_u32(buf, code);
+  buf_append_u32(buf, (uint32_t)msg.size());
+  buf_append_str(buf, (uint8_t const *)msg.data(), msg.size());
+}
+
+void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
@@ -236,7 +271,7 @@ static void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
   return out_str(buffer, val.data(), val.size());
 }
 
-static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
+void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
@@ -255,7 +290,7 @@ static void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
   return out_nil(buffer);
 }
 
-static void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
+void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
