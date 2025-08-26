@@ -1,5 +1,5 @@
 #include <stdlib.h>  // calloc(), free()
-#include "hashtable.hh"
+#include "byoredis/ds/hashtable.hh"
 #include <assert.h>
 
 size_t const k_max_load_factor = 8;

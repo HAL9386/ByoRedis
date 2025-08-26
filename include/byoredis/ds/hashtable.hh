@@ -1,8 +1,7 @@
-#ifndef HASH_TABLE_HH
-#define HASH_TABLE_HH
+#pragma once
 
-#include <stddef.h>
 #include <stdint.h>
+#include <stddef.h>
 
 // hashtablde intrusive linked list node with hash value of the key,
 // should be embedded into the payload
@@ -37,5 +36,3 @@ void    hm_clear(HMap *hmap);
 size_t  hm_size(HMap *hmap);
 // invoke the callback on each node until it returns false
 void    hm_foreach(HMap *hmap, bool (*cb)(HNode *, void *), void *arg);
-
-#endif  // HASH_TABLE_HH

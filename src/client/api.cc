@@ -1,12 +1,9 @@
-#include "client_api.hh"
-#include "common.hh"
-#include "server_conn.hh"
-
-#include <vector>
+#include "byoredis/client/api.hh"
+#include "byoredis/common/log.hh"
+#include "byoredis/proto/tlv.hh"
 #include <string.h>
-#include <stdio.h>
-#include <errno.h>
 #include <assert.h>
+#include <unistd.h>
 
 // payload
 // +------|-----|------|-----|------|-----|-----|------+
@@ -193,3 +190,4 @@ int32_t print_response(uint8_t const *data, size_t size) {
     return -1;
   }
 }
+

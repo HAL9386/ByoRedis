@@ -1,7 +1,6 @@
-#ifndef CLIENT_API_HH
-#define CLIENT_API_HH
+#pragma once
+
 #include <stdint.h>
-#include <stddef.h>
 #include <string>
 #include <vector>
 
@@ -12,5 +11,3 @@ int32_t read_full(int fd, char *buf, size_t n);
 int32_t write_all(int fd, char const *buf, size_t n);
 // return deserialized response size
 int32_t print_response(uint8_t const *data, size_t size);
-
-#endif

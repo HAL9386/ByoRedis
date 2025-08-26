@@ -1,5 +1,5 @@
 #include <assert.h>
-#include "avl.hh"
+#include "byoredis/ds/avl.hh"
 
 static uint32_t max(uint32_t lhs, uint32_t rhs) {
   return lhs > rhs ? lhs : rhs;

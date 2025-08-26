@@ -8,10 +8,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <poll.h>
-
-#include "common.hh"
-#include "server_conn.hh"
 #include <assert.h>
+
+#include "byoredis/common/log.hh"
+#include "byoredis/common/net.hh"
+#include "byoredis/server/conn.hh"
+#include "byoredis/server/db.hh"
+
+GlobalData g_data{};
 
 int main() {
   int fd = socket(AF_INET, SOCK_STREAM, 0);

@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <string>
 
-#include "common.hh"
-#include "client_api.hh"
+#include "byoredis/common/log.hh"
+#include "byoredis/client/api.hh"
 
 int main(int argc, char **argv) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);

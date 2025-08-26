@@ -1,15 +1,16 @@
-# Makefile for ByoRedis
+# Makefile for ByoRedis (refactored layout)
 # Usage examples:
 #   make                # build all (server, client)
 #   make -j             # parallel build
 #   make run-server     # run built server
 #   make DEBUG=1        # debug build (-O0 -g3)
 #   make SAN=address    # enable sanitizer(s), e.g., address,undefined
+#   make tests          # build all tests in test/
 
 # Tools and flags (override from CLI if needed)
 CXX ?= g++
 CPPFLAGS ?=
-CPPFLAGS += -I.
+CPPFLAGS += -Iinclude
 
 # Base C++ flags
 CXXFLAGS ?=
@@ -29,44 +30,70 @@ endif
 # Output directories
 BUILDDIR := build
 BINDIR   := bin
+TESTBINDIR := $(BINDIR)/tests
 
 # Sources
-SRCS := common.cc client.cc server.cc server_conn.cc client_api.cc hashtable.cc
-OBJS := $(SRCS:%.cc=$(BUILDDIR)/%.o)
-DEPS := $(OBJS:.o=.d)
+SRCS_COMMON  := $(wildcard src/common/*.cc) $(wildcard src/proto/*.cc) $(wildcard src/ds/*.cc)
+SRCS_SERVER  := $(wildcard src/server/*.cc)
+SRCS_CLIENT  := $(wildcard src/client/*.cc)
 
-SERVER_OBJS := $(BUILDDIR)/server.o $(BUILDDIR)/common.o $(BUILDDIR)/server_conn.o $(BUILDDIR)/hashtable.o
-CLIENT_OBJS := $(BUILDDIR)/client.o $(BUILDDIR)/common.o $(BUILDDIR)/client_api.o
+# Objects (mirror directory structure under build/)
+OBJS_COMMON := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_COMMON))
+OBJS_SERVER := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_SERVER))
+OBJS_CLIENT := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_CLIENT))
+
+# Dependencies
+DEPS := $(OBJS_COMMON:.o=.d) $(OBJS_SERVER:.o=.d) $(OBJS_CLIENT:.o=.d)
+
+# Tests (conventional handling)
+TEST_SRCS := $(wildcard test/*.cc)
+TEST_OBJS := $(patsubst test/%.cc,$(BUILDDIR)/test/%.o,$(TEST_SRCS))
+TEST_DEPS := $(TEST_OBJS:.o=.d)
+TEST_BINS := $(patsubst test/%.cc,$(TESTBINDIR)/%,$(TEST_SRCS))
 
 # Default goal
 .DEFAULT_GOAL := all
 
 # Phony targets
-.PHONY: all clean distclean run-server run-client help
+.PHONY: all clean distclean run-server run-client help tests
 
 all: ## Build all targets (server, client)
 all: $(BINDIR)/server $(BINDIR)/client
 
 # Link steps
-$(BINDIR)/server: $(SERVER_OBJS) | $(BINDIR)
+$(BINDIR)/server: $(OBJS_SERVER) $(OBJS_COMMON) | $(BINDIR)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-$(BINDIR)/client: $(CLIENT_OBJS) | $(BINDIR)
+$(BINDIR)/client: $(OBJS_CLIENT) $(OBJS_COMMON) | $(BINDIR)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-# Compile steps with dep generation
-$(BUILDDIR)/%.o: %.cc | $(BUILDDIR)
+# Tests: build all test binaries
+tests: ## Build all tests under test/
+tests: $(TEST_BINS)
+
+# Link rule for each test binary (link with common objects)
+$(TESTBINDIR)/%: $(BUILDDIR)/test/%.o $(OBJS_COMMON) | $(TESTBINDIR)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+# Compile steps with dep generation (mirror src/ -> build/)
+$(BUILDDIR)/%.o: src/%.cc
+	@mkdir -p $(@D)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+# Compile tests with dep generation
+$(BUILDDIR)/test/%.o: test/%.cc
+	@mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 # Ensure directories exist
-$(BUILDDIR):
-	@mkdir -p $@
-
 $(BINDIR):
 	@mkdir -p $@
 
+$(TESTBINDIR):
+	@mkdir -p $@
+
 # Include auto-generated dependencies
--include $(DEPS)
+-include $(DEPS) $(TEST_DEPS)
 
 # Convenience targets
 run-server: ## Build and run the server
@@ -84,4 +111,4 @@ distclean: ## Clean everything including binaries
 	$(RM) -r $(BUILDDIR) $(BINDIR)
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(lastword $(MAKEFILE_LIST)) | sed -E 's/:.*## /: /' | sort
+	@grep -E '^[a-zA-Z0-9_/.-]+:.*?## ' $(lastword $(MAKEFILE_LIST)) | sed -E 's/:.*## /: /' | sort
