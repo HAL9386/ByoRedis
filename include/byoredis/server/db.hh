@@ -21,5 +21,12 @@ struct LookupKey {  // for lookup only
   std::string key;
 };
 
+struct HKey {  // for the hashtable key(zset name) compare function
+  HNode node;
+  char const *name = NULL;
+  size_t len = 0;
+};
+
 bool key_eq(HNode *lhs, HNode *rhs);
 uint64_t str_hash(uint8_t const *data, size_t len);
+bool hcmp(HNode *node, HNode *key);

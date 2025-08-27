@@ -144,3 +144,67 @@ AVLNode *avl_del(AVLNode *node) {
   *from = victim;
   return root;
 }
+
+// static AVLNode * successor(AVLNode *node) {
+//   // find the leftmost node in the right subtree
+//   if (node->right) {
+//     for (node = node->right; node->left; node = node->left) {}
+//     return node;
+//   }
+//   // find the ancestor where I'm the rightmost node in the left subtree
+//   while (AVLNode *parent = node->parent) {
+//     if (node == parent->left) {
+//       return parent;
+//     }
+//     node = parent;
+//   }
+//   return NULL; // no successor
+// }
+
+// static AVLNode * predecessor(AVLNode *node) {
+//   // find the rightmost node in the left subtree
+//   if (node->left) {
+//     for (node = node->left; node->right; node = node->right) {}
+//     return node;
+//   }
+//   // find the ancestor where I'm the leftmost node in the right subtree
+//   while (AVLNode *parent = node->parent) {
+//     if (node == parent->right) {
+//       return parent;
+//     }
+//     node = parent;
+//   }
+//   return NULL; // no predecessor
+// }
+
+// offset into the succeeding or preceding node.
+// Find a path to the target node via the lowest common ancestor.
+// It goes up at most once and goes down at most once.
+// So its OlogN in the worst case.
+AVLNode * avl_offset(AVLNode *node, int64_t offset) {
+  int64_t pos = 0;  // the rank difference from the starting node
+  while (pos != offset) {
+    if (pos < offset && pos + avl_size(node->right) >= offset) {
+      // the target is in the right subtree
+      node = node->right;
+      pos += 1 + avl_size(node->left);
+    } else if (pos > offset && pos - avl_size(node->left) <= offset) {
+      // the target is in the left subtree
+      node = node->left;
+      pos -= 1 + avl_size(node->right);
+    } else {
+      // go up to the parent
+      AVLNode *parent = node->parent;
+      if (!parent) {
+        return NULL;
+      }
+      if (node == parent->right) {
+        pos -= 1 + avl_size(node->left);
+      } else {
+        pos += 1 + avl_size(node->right);
+      }
+      node = parent;
+    }
+  }
+  return node;
+}
