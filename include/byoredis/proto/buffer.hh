@@ -9,9 +9,9 @@ struct Buffer {
   size_t readable_begin = 0;
   size_t writable_begin = 0;
 
-  // In-flight message(4 bytes header placeholder for message length)
-  bool   inflight = false;
-  size_t inflight_header_pos = 0;
+  // Stack of placeholder positions (offsets into buf) that need to be backfilled later.
+  // Used for response message size or TLV array size and potentially other deferred fields (LIFO order).
+  std::vector<size_t> placeholder_stack;
 
   explicit Buffer(size_t init_cap = 4096) { buf.resize(init_cap); }
 
@@ -22,15 +22,6 @@ struct Buffer {
   uint8_t const * readable_data() const { return &buf[readable_begin]; }
   uint8_t       * writable_data()       { return &buf[writable_begin]; }
 
-  size_t message_begin();
-
-  size_t message_size() {
-    assert(inflight);
-    return writable_begin - inflight_header_pos - 4;
-  }
-
-  void message_end(uint32_t msg_size);
-
   void ensure_writable(size_t ensure_size); 
 
   void append(uint8_t const *data, size_t n); 
@@ -38,4 +29,19 @@ struct Buffer {
   void consume(size_t n); 
 
   void shrink_if_wasteful(size_t hard_min = 4096); 
+
+  // Placeholder helpers for deferred backfilling
+  inline void push_placeholder() { 
+    placeholder_stack.push_back(writable_begin); 
+  }
+  inline size_t peek_placeholder() {
+    assert(!placeholder_stack.empty());
+    return placeholder_stack.back();
+  }
+  inline size_t pop_placeholder() {
+    assert(!placeholder_stack.empty());
+    size_t pos = placeholder_stack.back();
+    placeholder_stack.pop_back();
+    return pos;
+  }
 };

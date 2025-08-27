@@ -1,21 +1,6 @@
 #include "byoredis/proto/buffer.hh"
 #include <string.h>
 
-size_t Buffer::message_begin() {
-  assert(!inflight);
-  inflight = true;
-  inflight_header_pos = writable_begin;
-  uint32_t zero = 0;
-  append((uint8_t const *)&zero, 4);
-  return inflight_header_pos;
-}
-
-void Buffer::message_end(uint32_t msg_size) {
-  assert(inflight);
-  memcpy(&buf[inflight_header_pos], &msg_size, 4);
-  inflight = false;
-}
-
 void Buffer::ensure_writable(size_t ensure_size) {
   if (writable_size() >= ensure_size) {
     return;
@@ -27,9 +12,15 @@ void Buffer::ensure_writable(size_t ensure_size) {
     memmove(&buf[0], &buf[readable_begin], unread_len);
     readable_begin = 0;
     writable_begin = unread_len;
-    if (inflight && inflight_header_pos >= old_readable_begin) {
+
+    // adjust all deferred placeholders
+    if (!placeholder_stack.empty()) {
       size_t shift = old_readable_begin;
-      inflight_header_pos -= shift;
+      for (size_t &pos : placeholder_stack) {
+        if (pos >= old_readable_begin) {
+          pos -= shift;
+        }
+      }
     }
     return;
   }
@@ -42,8 +33,12 @@ void Buffer::ensure_writable(size_t ensure_size) {
   buf.swap(new_buf);
   readable_begin = 0;
   writable_begin = unread_len;
-  if (inflight && inflight_header_pos >= shift) {
-    inflight_header_pos -= shift;
+  if (!placeholder_stack.empty()) {
+    for (size_t &pos : placeholder_stack) {
+      if (pos >= shift) {
+        pos -= shift;
+      }
+    }
   }
 }
 
@@ -74,8 +69,12 @@ void Buffer::shrink_if_wasteful(size_t hard_min) {
     size_t shift = readable_begin;
     readable_begin = 0;
     writable_begin = unread_len;
-    if (inflight && inflight_header_pos >= shift) {
-      inflight_header_pos -= shift;
+    if (!placeholder_stack.empty()) {
+      for (size_t &pos : placeholder_stack) {
+        if (pos >= shift) {
+          pos -= shift;
+        }
+      }
     }
   }
 }

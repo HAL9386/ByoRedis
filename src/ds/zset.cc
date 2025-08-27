@@ -10,7 +10,7 @@ ZNode * zset_lookup(ZSet *zset, char const *name, size_t len) {
     return NULL;
   }
   HKey key;
-  key.node.hcode = str_hash((uint8_t *)name, len);
+  key.node.hcode = str_hash((uint8_t const *)name, len);
   key.name = name;
   key.len = len;
   HNode *found = hm_lookup(&zset->hmap, &key.node, &hcmp);
@@ -66,7 +66,7 @@ static ZNode * znode_new(char const *name, size_t len, double score) {
   assert(node);  // not a good idea in read projects
   avl_init(&node->tree);   // init AVLNode
   node->hmap.next  = NULL; // init HNode
-  node->hmap.hcode = str_hash((uint8_t *)name, len);
+  node->hmap.hcode = str_hash((uint8_t const *)name, len);
   node->score = score;     // init data
   node->len   = len;
   memcpy(&node->name[0], name, len);

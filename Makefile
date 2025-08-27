@@ -33,8 +33,8 @@ BINDIR   := bin
 TESTBINDIR := $(BINDIR)/tests
 
 # Sources
-SRCS_COMMON  := $(wildcard src/common/*.cc) $(wildcard src/proto/*.cc) $(wildcard src/ds/*.cc)
-SRCS_SERVER  := $(wildcard src/server/*.cc)
+SRCS_COMMON  := $(wildcard src/common/*.cc) $(wildcard src/proto/*.cc)
+SRCS_SERVER  := $(wildcard src/server/*.cc) $(wildcard src/ds/*.cc)
 SRCS_CLIENT  := $(wildcard src/client/*.cc)
 
 # Objects (mirror directory structure under build/)

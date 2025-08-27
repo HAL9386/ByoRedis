@@ -27,6 +27,8 @@ enum TAG {
 enum TAG_ERR_CODE {
   ERR_UNKNOWN = 1,  // unknown command
   ERR_TOO_BIG = 2,  // response too big
+  ERR_BAD_ARG = 3,  // bad argument
+  ERR_BAD_TYP = 4,  // bad type
 };
 
 struct Buffer;
@@ -40,8 +42,10 @@ void out_nil(Buffer &buf);
 void out_str(Buffer &buf, char const *s, size_t size);
 void out_int(Buffer &buf, int64_t val);
 void out_dbl(Buffer &buf, double val);
-void out_arr(Buffer &buf, uint32_t n);
 void out_err(Buffer &buf, uint32_t code, std::string const &msg);
+void out_arr(Buffer &buf, uint32_t n);
+void out_begin_arr(Buffer &buf);
+void out_end_arr(Buffer &buf, uint32_t n);
 
 // read 4 bytes as uint32_t, and move cur forward by 4
 bool read_u32(uint8_t const *&cur, uint8_t const *end, uint32_t &out);

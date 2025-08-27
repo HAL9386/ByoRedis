@@ -3,6 +3,21 @@
 #include "byoredis/ds/zset.hh"
 #include <string.h>
 
+GlobalData g_data{};
+
+Entry * entry_new(uint32_t type) {
+  Entry *ent = new Entry();
+  ent->type = type;
+  return ent;
+}
+
+void entry_free(Entry *ent) {
+  if (ent->type == T_ZSET) {
+    zset_clear(&ent->zset);
+  }
+  delete ent;
+}
+
 // equality comparison for `struct Entry` and `struct LookupKey`
 bool key_eq(HNode *lhs, HNode *rhs) {
   struct Entry *le     = container_of(lhs, struct Entry, node);

@@ -60,14 +60,26 @@ void out_dbl(Buffer &buf, double val) {
   buf_append_dbl(buf, val);
 }
 
-void out_arr(Buffer &buf, uint32_t n) {
-  buf_append_u8(buf, TAG_ARR);
-  buf_append_u32(buf, n);
-}
-
 void out_err(Buffer &buf, uint32_t code, std::string const &msg) {
   buf_append_u8(buf, TAG_ERR);
   buf_append_u32(buf, code);
   buf_append_u32(buf, (uint32_t)msg.size());
   buf_append_str(buf, (uint8_t const *)msg.data(), msg.size());
+}
+
+void out_arr(Buffer &buf, uint32_t n) {
+  buf_append_u8(buf, TAG_ARR);
+  buf_append_u32(buf, n);
+}
+
+void out_begin_arr(Buffer &buf) {
+  buf_append_u8(buf, TAG_ARR);
+  buf.push_placeholder();
+  buf_append_u32(buf, 0);       // placeholder, filled by out_end_arr()
+}
+
+void out_end_arr(Buffer &buf, uint32_t n) {
+  size_t pos = buf.pop_placeholder();
+  assert(buf.buf[pos - 1] == TAG_ARR);
+  memcpy(&buf.buf[pos], &n, 4);
 }

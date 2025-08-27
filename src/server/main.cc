@@ -15,8 +15,6 @@
 #include "byoredis/server/conn.hh"
 #include "byoredis/server/db.hh"
 
-GlobalData g_data{};
-
 int main() {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {

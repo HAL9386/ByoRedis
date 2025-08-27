@@ -99,23 +99,27 @@ void handle_write(Conn *conn) {
 }
 
 static void response_begin(Buffer &buf) {
-  buf.message_begin();
+  // buf.message_begin();
+  buf.push_placeholder(); // reserve space for message length
+  buf_append_u32(buf, 0); // placeholder, filled by response_end()
 }
 
 static size_t response_size(Buffer &buf) {
-  return buf.message_size();
+  // return buf.message_size();
+  return buf.writable_begin - buf.peek_placeholder() - 4;
 }
 
 static void response_end(Buffer &buf) {
   size_t msg_size = response_size(buf);
   if (msg_size > k_max_msg) {
     // rollback payload to just after header placeholder
-    buf.writable_begin = buf.inflight_header_pos + 4;
+    // buf.writable_begin = buf.inflight_header_pos + 4;
+    buf.writable_begin = buf.peek_placeholder() + 4;
     out_err(buf, ERR_TOO_BIG, "response too big");
     msg_size = response_size(buf);
   }
   uint32_t len = (uint32_t)msg_size; 
-  buf.message_end(len);
+  memcpy(&buf.buf[buf.pop_placeholder()], &len, 4);
 }
 
 // process 1 request if there is enough data in the incoming buffer
@@ -190,6 +194,14 @@ void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer)
     return do_del(cmd, buffer);
   } else if (cmd.size() == 1 && cmd[0] == "keys") {
     return do_keys(cmd, buffer);
+  } else if (cmd.size() == 4 && cmd[0] == "zadd") {
+    return do_zadd(cmd, buffer);
+  } else if (cmd.size() == 3 && cmd[0] == "zrem") {
+    return do_zrem(cmd, buffer);
+  } else if (cmd.size() == 3 && cmd[0] == "zscore") {
+    return do_zscore(cmd, buffer);
+  } else if (cmd.size() == 6 && cmd[0] == "zquery") {
+    return do_zquery(cmd, buffer);
   } else {
     return out_err(buffer, ERR_UNKNOWN, "unknown command");
   }
