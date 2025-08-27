@@ -27,3 +27,4 @@ inline uint32_t avl_size(AVLNode *node) { return node ? node->size : 0; }
 AVLNode * avl_fix(AVLNode *node);
 AVLNode * avl_del(AVLNode *node);
 AVLNode * avl_offset(AVLNode *node, int64_t offset);
+int64_t   avl_rank(AVLNode *node);

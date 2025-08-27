@@ -208,3 +208,14 @@ AVLNode * avl_offset(AVLNode *node, int64_t offset) {
   }
   return node;
 }
+
+int64_t avl_rank(AVLNode *node) {
+  int64_t rank = avl_size(node->left);
+  while (AVLNode *parent = node->parent) {
+    if (node == parent->right) {
+      rank += 1 + avl_size(parent->left);
+    }
+    node = parent;
+  }
+  return rank;
+}

@@ -186,3 +186,41 @@ void do_zquery(std::vector<std::string> &cmd, Buffer &buffer) {
   }
   out_end_arr(buffer, (uint32_t)(n * 2));
 }
+
+// zrank zset name
+void do_zrank(std::vector<std::string> &cmd, Buffer &buffer) {
+  ZSet *zset = expect_zset(cmd[1]);
+  if (!zset) {
+    return out_err(buffer, ERR_BAD_TYP, "expect zset");
+  }
+
+  std::string const &name = cmd[2];
+  ZNode *znode = zset_lookup(zset, name.data(), name.size());
+  return znode ? out_int(buffer, avl_rank(&znode->tree)) : out_nil(buffer);
+}
+
+// zcount zset score1 name1 score2 name2(exclusive)
+void do_zcount(std::vector<std::string> &cmd, Buffer &buffer) {
+  double score1 = 0, score2 = 0;
+  if (!str2dbl(cmd[2], score1) || !str2dbl(cmd[4], score2)) {
+    return out_err(buffer, ERR_BAD_ARG, "expect fp number");
+  }
+  ZSet *zset = expect_zset(cmd[1]);
+  if (!zset) {
+    return out_err(buffer, ERR_BAD_TYP, "expect zset");
+  }
+  std::string const &name1 = cmd[3];
+  std::string const &name2 = cmd[5];
+  ZNode *znode1 = zset_seekge(zset, score1, name1.data(), name1.size());
+  ZNode *znode2 = zset_seekge(zset, score2, name2.data(), name2.size());
+  if (!znode1 || !znode2) {
+    return out_int(buffer, 0);
+  }
+  int64_t rank1 = avl_rank(&znode1->tree);
+  int64_t rank2 = avl_rank(&znode2->tree);
+  int64_t count = rank2 - rank1;
+  if (count < 0) {
+    count = 0;
+  }
+  return out_int(buffer, count);
+}

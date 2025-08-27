@@ -202,6 +202,10 @@ void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer)
     return do_zscore(cmd, buffer);
   } else if (cmd.size() == 6 && cmd[0] == "zquery") {
     return do_zquery(cmd, buffer);
+  } else if (cmd.size() == 3 && cmd[0] == "zrank") {
+    return do_zrank(cmd, buffer);
+  } else if (cmd.size() == 6 && cmd[0] == "zcount") {
+    return do_zcount(cmd, buffer);
   } else {
     return out_err(buffer, ERR_UNKNOWN, "unknown command");
   }
