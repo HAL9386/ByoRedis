@@ -14,7 +14,7 @@ CPPFLAGS += -Iinclude
 
 # Base C++ flags
 CXXFLAGS ?=
-CXXFLAGS += -std=c++20 -Wall -Wextra -Wpedantic -O2 -g
+CXXFLAGS += -std=c++20 -Wall -Wextra -O2 -g
 
 # Optional debug and sanitizer knobs
 ifeq ($(DEBUG),1)
