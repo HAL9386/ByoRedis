@@ -1,6 +1,7 @@
 #include "byoredis/server/db.hh"
 #include "byoredis/ds/intrusive.hh"  // for container_of
 #include "byoredis/ds/zset.hh"
+#include "byoredis/server/time.hh"
 #include <string.h>
 
 GlobalData g_data{};
@@ -15,7 +16,22 @@ void entry_free(Entry *ent) {
   if (ent->type == T_ZSET) {
     zset_clear(&ent->zset);
   }
+  entry_set_ttl(ent, -1); // remove from the TTL heap
   delete ent;
+}
+
+// set or remove the TTL
+void entry_set_ttl(Entry *ent, int64_t ttl_ms) {
+  if (ttl_ms < 0 && ent->heap_idx != (size_t)-1) {
+    // setting a negative TTL means removing the TTL
+    heap_delete(g_data.heap, ent->heap_idx);
+    ent->heap_idx = -1;
+  } else if (ttl_ms >= 0) {
+    // add or update the TTL
+    uint64_t expire_at = get_monotonic_msec() + (uint64_t)ttl_ms;
+    HeapItem item = {expire_at, &ent->heap_idx};
+    heap_upsert(g_data.heap, ent->heap_idx, item);
+  }
 }
 
 // equality comparison for `struct Entry` and `struct LookupKey`
@@ -41,4 +57,9 @@ bool hcmp(HNode *node, HNode *key) {
     return false;
   }
   return 0 == memcmp(znode->name, hkey->name, znode->len);
+}
+
+// used for deleting a expired node
+bool hnode_same(HNode *node, HNode *key) {
+  return node == key;
 }
