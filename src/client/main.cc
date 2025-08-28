@@ -25,6 +25,14 @@ int main(int argc, char **argv) {
   if (rv) {
     die("connect()");
   }
+
+  // multi request
+  if (argc == 2 && strcmp(argv[1], "--multi") == 0) {
+    (void)multi_req(fd);
+    close(fd);
+    return 0;
+  }
+
   std::vector<std::string> cmd;
   for (int i = 1; i < argc; i++) {
     cmd.push_back(argv[i]);

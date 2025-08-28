@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <sstream>
 
 // payload
 // +------|-----|------|-----|------|-----|-----|------+
@@ -191,3 +192,34 @@ int32_t print_response(uint8_t const *data, size_t size) {
   }
 }
 
+// helper to split a command line by whitespace into argv-like tokens
+static std::vector<std::string> split_cmd(std::string const &line) {
+  std::vector<std::string> out;
+  std::istringstream iss(line);
+  std::string tok;
+  while (iss >> tok) {
+    out.push_back(tok);
+  }
+  return out;
+}
+
+int32_t multi_req(int fd) {
+  std::vector<std::string> commands = {
+    "set k 1",
+    "get k",
+    "zadd z 10 a",
+    "zadd z 20 b",
+    "zquery z 0 0 0 10",
+  };
+  for (std::string const &cmd : commands) {
+    std::vector<std::string> tokens = split_cmd(cmd);
+    if (tokens.empty()) {
+      continue;
+    }
+    int32_t err = send_req(fd, tokens);
+    if (err < 0) return err;
+    err = read_res(fd);
+    if (err < 0) return err;
+  }
+  return 0;
+}

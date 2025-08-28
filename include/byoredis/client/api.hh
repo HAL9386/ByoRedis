@@ -11,3 +11,5 @@ int32_t read_full(int fd, char *buf, size_t n);
 int32_t write_all(int fd, char const *buf, size_t n);
 // return deserialized response size
 int32_t print_response(uint8_t const *data, size_t size);
+// send multiple commands in sequence for quick testing
+int32_t multi_req(int fd);
