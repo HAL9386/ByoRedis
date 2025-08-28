@@ -4,9 +4,15 @@
 
 #include "byoredis/ds/hashtable.hh"
 #include "byoredis/ds/zset.hh"
+#include "byoredis/server/conn.hh"
+#include <vector>
 
 struct GlobalData {
   HMap db;  // top-level hashtable
+  // a map of all client connections, keyed by fd
+  std::vector<Conn *> fd2conn;
+  // timers for idle connections
+  DList idle_list;
 };
 extern GlobalData g_data;
 

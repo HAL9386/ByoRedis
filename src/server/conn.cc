@@ -3,19 +3,28 @@
 #include "byoredis/common/net.hh"
 #include "byoredis/proto/tlv.hh"
 #include "byoredis/server/commands.hh"
+#include "byoredis/server/time.hh"
+#include "byoredis/server/db.hh"
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
 
+void conn_destroy(Conn *conn) {
+  (void)close(conn->fd);
+  g_data.fd2conn[conn->fd] = NULL;
+  dlist_detach(&conn->idle_node);
+  delete conn;
+}
+
 // application callback when the listening socket is ready
-Conn *handle_accept(int fd) {
+int32_t handle_accept(int fd) {
   // accept
   struct sockaddr_in client_addr = {};
   socklen_t addr_len = sizeof(client_addr);
   int connfd = accept(fd, (struct sockaddr *)&client_addr, &addr_len);
   if (connfd < 0) {
     msg_errno("accept() error");
-    return NULL;
+    return -1;
   }
   uint32_t ip = client_addr.sin_addr.s_addr;
   fprintf(stderr, "new client from %u.%u.%u.%u:%u\n",
@@ -28,7 +37,15 @@ Conn *handle_accept(int fd) {
   Conn *conn = new Conn();
   conn->fd = connfd;
   conn->want_read = true;
-  return conn;
+  conn->last_active_ms = get_monotonic_msec();
+  dlist_insert_before(&g_data.idle_list, &conn->idle_node);
+  // put it into the map
+  if (g_data.fd2conn.size() <= (size_t)conn->fd) {
+    g_data.fd2conn.resize(conn->fd + 1);
+  }
+  assert(!g_data.fd2conn[conn->fd]);
+  g_data.fd2conn[conn->fd] = conn;
+  return 0;
 }
 
 void handle_read(Conn *conn) {
