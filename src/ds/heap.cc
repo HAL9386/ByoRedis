@@ -1,5 +1,3 @@
-#pragma once
-
 #include "byoredis/ds/heap.hh"
 
 inline static size_t heap_parent(size_t i) {
@@ -72,6 +70,11 @@ void heap_delete(std::vector<HeapItem> &a, size_t pos) {
   if (pos < a.size()) {
     heap_update(a.data(), pos, a.size());
   }
+}
+
+void heap_insert(std::vector<HeapItem> &a, HeapItem t) {
+  a.push_back(t);
+  heap_update(a.data(), a.size() - 1, a.size());
 }
 
 void heap_upsert(std::vector<HeapItem> &a, size_t pos, HeapItem t) {

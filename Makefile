@@ -36,16 +36,19 @@ TESTBINDIR := $(BINDIR)/tests
 SRCS_COMMON  := $(wildcard src/common/*.cc) $(wildcard src/proto/*.cc)
 SRCS_SERVER  := $(wildcard src/server/*.cc) $(wildcard src/ds/*.cc)
 SRCS_CLIENT  := $(wildcard src/client/*.cc)
+# Data-structure sources (for tests without pulling in server/main.cc)
+SRCS_DS      := $(wildcard src/ds/*.cc)
 
 # Objects (mirror directory structure under build/)
 OBJS_COMMON := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_COMMON))
 OBJS_SERVER := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_SERVER))
 OBJS_CLIENT := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_CLIENT))
+OBJS_DS     := $(patsubst src/%.cc,$(BUILDDIR)/%.o,$(SRCS_DS))
 
 # Dependencies
 DEPS := $(OBJS_COMMON:.o=.d) $(OBJS_SERVER:.o=.d) $(OBJS_CLIENT:.o=.d)
 
-# Tests (conventional handling)
+# Tests (build test sources and link with common + ds objects)
 TEST_SRCS := $(wildcard test/*.cc)
 TEST_OBJS := $(patsubst test/%.cc,$(BUILDDIR)/test/%.o,$(TEST_SRCS))
 TEST_DEPS := $(TEST_OBJS:.o=.d)
@@ -71,8 +74,8 @@ $(BINDIR)/client: $(OBJS_CLIENT) $(OBJS_COMMON) | $(BINDIR)
 tests: ## Build all tests under test/
 tests: $(TEST_BINS)
 
-# Link rule for each test binary (link with common objects)
-$(TESTBINDIR)/%: $(BUILDDIR)/test/%.o $(OBJS_COMMON) | $(TESTBINDIR)
+# Link rule for each test binary (link with common + ds objects)
+$(TESTBINDIR)/%: $(BUILDDIR)/test/%.o $(OBJS_COMMON) $(OBJS_DS) | $(TESTBINDIR)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 # Compile steps with dep generation (mirror src/ -> build/)

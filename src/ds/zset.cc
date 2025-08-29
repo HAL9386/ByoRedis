@@ -1,8 +1,33 @@
 #include "byoredis/ds/zset.hh"
-#include "byoredis/server/db.hh"
 #include "byoredis/ds/intrusive.hh"
 #include <string.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <algorithm>
+
+// provide local key type and helpers so zset does not depend on server/db
+struct HKey {  // for the hashtable key (zset name) compare function
+  HNode node;
+  char const *name = NULL;
+  size_t len = 0;
+};
+
+static uint64_t str_hash(uint8_t const *data, size_t len) {
+  uint32_t h = 0x811C9DC5;  // FNV variant
+  for (size_t i = 0; i < len; i++) {
+    h = (h + data[i]) * 0x1000193;
+  }
+  return h;
+}
+
+static bool hcmp(HNode *node, HNode *key) {
+  ZNode *znode = container_of(node, ZNode, hmap);
+  HKey  *hkey  = container_of(key, HKey, node);
+  if (znode->len != hkey->len) {
+    return false;
+  }
+  return 0 == memcmp(znode->name, hkey->name, znode->len);
+}
 
 // lookup by name in the hashtable
 ZNode * zset_lookup(ZSet *zset, char const *name, size_t len) {

@@ -11,4 +11,5 @@ struct HeapItem {
 
 void heap_update(HeapItem *a, size_t pos, size_t len);
 void heap_delete(std::vector<HeapItem> &a, size_t pos);
+void heap_insert(std::vector<HeapItem> &a, HeapItem t);
 void heap_upsert(std::vector<HeapItem> &a, size_t pos, HeapItem t);
