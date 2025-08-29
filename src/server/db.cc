@@ -34,9 +34,9 @@ void entry_set_ttl(Entry *ent, int64_t ttl_ms) {
   }
 }
 
-// equality comparison for `struct Entry` and `struct LookupKey`
-bool key_eq(HNode *lhs, HNode *rhs) {
-  struct Entry *le     = container_of(lhs, struct Entry, node);
+// equality comparison for top-level hashtable
+bool entry_eq(HNode *lhs, HNode *rhs) {
+  struct Entry     *le = container_of(lhs, struct Entry, node);
   struct LookupKey *rk = container_of(rhs, struct LookupKey, node);
   return le->key == rk->key;
 }

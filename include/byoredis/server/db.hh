@@ -52,7 +52,7 @@ Entry * entry_new(uint32_t type);
 void    entry_free(Entry *ent);
 void    entry_set_ttl(Entry *ent, int64_t ttl_ms);
 
-bool key_eq(HNode *lhs, HNode *rhs);
+bool entry_eq(HNode *lhs, HNode *rhs);
 uint64_t str_hash(uint8_t const *data, size_t len);
 bool hcmp(HNode *node, HNode *key);
 bool hnode_same(HNode *node, HNode *key);

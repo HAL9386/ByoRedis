@@ -4,13 +4,14 @@
 #include "byoredis/proto/tlv.hh"
 #include "byoredis/ds/intrusive.hh"  // for container_of
 #include "byoredis/ds/zset.hh"
+#include "byoredis/server/time.hh"
 #include <math.h>
 
 void do_get(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
-  HNode *node = hm_lookup(&g_data.db, &key.node, &key_eq);
+  HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
   if (!node) {
     return out_nil(buffer);
   }
@@ -25,7 +26,7 @@ void do_set(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
-  HNode *node = hm_lookup(&g_data.db, &key.node, &key_eq);
+  HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
   if (node) {
     // found, update the value
     Entry *ent = container_of(node, Entry, node);
@@ -48,7 +49,7 @@ void do_del(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
-  HNode *node = hm_delete(&g_data.db, &key.node, &key_eq);
+  HNode *node = hm_delete(&g_data.db, &key.node, &entry_eq);
   if (node) {  // deallocate the pair if found
     entry_free(container_of(node, Entry, node));
   }
@@ -89,7 +90,7 @@ void do_zadd(std::vector<std::string> &cmd, Buffer &buffer) {
   LookupKey key;
   key.key.swap(cmd[1]);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
-  HNode *hnode = hm_lookup(&g_data.db, &key.node, &key_eq);
+  HNode *hnode = hm_lookup(&g_data.db, &key.node, &entry_eq);
 
   Entry *ent = NULL;
   if (!hnode) {  // insert a new key
@@ -116,7 +117,7 @@ static ZSet * expect_zset(std::string &s) {
   LookupKey key;
   key.key.swap(s);
   key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
-  HNode *hnode = hm_lookup(&g_data.db, &key.node, &key_eq);
+  HNode *hnode = hm_lookup(&g_data.db, &key.node, &entry_eq);
   if (!hnode) {  // a non-existent key is treated as an empty zset
     return (ZSet *)&EMPTY_ZSET;
   }
@@ -223,4 +224,39 @@ void do_zcount(std::vector<std::string> &cmd, Buffer &buffer) {
     count = 0;
   }
   return out_int(buffer, count);
+}
+
+// pexpire key ttl_ms(negative to remove e.g. persist)
+void do_expire(std::vector<std::string> &cmd, Buffer &buffer) {
+  int64_t ttl_ms = 0;
+  if (!str2int(cmd[2], ttl_ms)) {
+    return out_err(buffer, ERR_BAD_ARG, "expect int64");
+  }
+  LookupKey key;
+  key.key.swap(cmd[1]);
+  key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
+  HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+  if (node) {
+    Entry *ent = container_of(node, Entry, node);
+    entry_set_ttl(ent, ttl_ms);
+  }
+  return out_int(buffer, node ? 1 : 0);  // the number of updated keys
+}
+
+// pttl key
+void do_ttl(std::vector<std::string> &cmd, Buffer &buffer) {
+  LookupKey key;
+  key.key.swap(cmd[1]);
+  key.node.hcode = str_hash((uint8_t const *)key.key.data(), key.key.size());
+  HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+  if (!node) {
+    return out_int(buffer, -2);  // not found
+  }
+  Entry *ent = container_of(node, Entry, node);
+  if (ent->heap_idx == (size_t)-1) {
+    return out_int(buffer, -1);  // no TTL
+  }
+  uint64_t expire_at = g_data.heap[ent->heap_idx].val;
+  uint64_t now_ms = get_monotonic_msec();
+  return out_int(buffer, expire_at > now_ms ? (int64_t)(expire_at - now_ms) : 0);
 }

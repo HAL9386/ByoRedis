@@ -223,6 +223,10 @@ void do_request_and_make_response(std::vector<std::string> &cmd, Buffer &buffer)
     return do_zrank(cmd, buffer);
   } else if (cmd.size() == 6 && cmd[0] == "zcount") {
     return do_zcount(cmd, buffer);
+  } else if (cmd.size() == 3 && cmd[0] == "pexpire") {
+    return do_expire(cmd, buffer);
+  } else if (cmd.size() == 2 && cmd[0] == "pttl") {
+    return do_ttl(cmd, buffer);
   } else {
     return out_err(buffer, ERR_UNKNOWN, "unknown command");
   }
