@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <sstream>
+#include <fstream>
 
 // payload
 // +------|-----|------|-----|------|-----|-----|------+
@@ -213,6 +214,37 @@ int32_t multi_req(int fd) {
   };
   for (std::string const &cmd : commands) {
     std::vector<std::string> tokens = split_cmd(cmd);
+    if (tokens.empty()) {
+      continue;
+    }
+    int32_t err = send_req(fd, tokens);
+    if (err < 0) return err;
+    err = read_res(fd);
+    if (err < 0) return err;
+  }
+  return 0;
+}
+
+// run commands from a file, one command per line
+int32_t run_commands_from_file(int fd, char const *path) {
+  std::ifstream ifs(path);
+  if (!ifs.is_open()) {
+    msg("failed to open file");
+    return -1;
+  }
+  std::string line;
+  while (std::getline(ifs, line)) {
+    // trim whitespace
+    size_t start = line.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+      continue; // blank line
+    }
+    size_t end = line.find_last_not_of(" \t\r\n");
+    std::string trimmed = line.substr(start, end - start + 1);
+    if (!trimmed.empty() && trimmed[0] == '#') {
+      continue; // comment line
+    }
+    std::vector<std::string> tokens = split_cmd(trimmed);
     if (tokens.empty()) {
       continue;
     }

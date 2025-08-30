@@ -19,8 +19,8 @@ int main(int argc, char **argv) {
   }
   struct sockaddr_in addr = {};
   addr.sin_family = AF_INET;
-  addr.sin_port = ntohs(1234);
-  addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK);  // connect to localhost
+  addr.sin_port = htons(1234);                  // fix: use htons
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  // connect to localhost
   int rv = connect(fd, (struct sockaddr const *)&addr, sizeof(addr));
   if (rv) {
     die("connect()");
@@ -31,6 +31,18 @@ int main(int argc, char **argv) {
     (void)multi_req(fd);
     close(fd);
     return 0;
+  }
+
+  // run commands from file
+  if (argc >= 2 && strcmp(argv[1], "--file") == 0) {
+    if (argc < 3) {
+      msg("--file requires a path");
+      close(fd);
+      return 1;
+    }
+    int32_t err = run_commands_from_file(fd, argv[2]);
+    close(fd);
+    return err ? 1 : 0;
   }
 
   std::vector<std::string> cmd;

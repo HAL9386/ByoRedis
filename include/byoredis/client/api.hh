@@ -13,3 +13,5 @@ int32_t write_all(int fd, char const *buf, size_t n);
 int32_t print_response(uint8_t const *data, size_t size);
 // send multiple commands in sequence for quick testing
 int32_t multi_req(int fd);
+// send commands read from a file (one command per line; whitespace separated tokens)
+int32_t run_commands_from_file(int fd, char const *path);
