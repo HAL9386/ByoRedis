@@ -6,6 +6,7 @@
 #include "byoredis/ds/zset.hh"
 #include "byoredis/server/conn.hh"
 #include "byoredis/ds/heap.hh"
+#include "byoredis/server/thread_pool.hh"
 #include <vector>
 
 struct GlobalData {
@@ -16,8 +17,12 @@ struct GlobalData {
   DList idle_list;
   // timers for TTLs
   std::vector<HeapItem> heap;
+  // the thread pool for background tasks(free zset nodes)
+  ThreadPool thread_pool;
 };
 extern GlobalData g_data;
+
+size_t const k_large_container_size = 1000;  // threshold for background free
 
 enum ENTRY_TYPE {
   T_INIT = 0,
@@ -49,7 +54,7 @@ struct HKey {  // for the hashtable key(zset name) compare function
 };
 
 Entry * entry_new(uint32_t type);
-void    entry_free(Entry *ent);
+void    entry_del(Entry *ent);
 void    entry_set_ttl(Entry *ent, int64_t ttl_ms);
 
 bool entry_eq(HNode *lhs, HNode *rhs);

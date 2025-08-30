@@ -19,6 +19,7 @@
 int main() {
   // initialization
   dlist_init(&g_data.idle_list);
+  thread_pool_init(&g_data.thread_pool, 4);
 
   // the listening socket
   int fd = socket(AF_INET, SOCK_STREAM, 0);

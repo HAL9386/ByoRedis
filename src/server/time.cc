@@ -51,7 +51,7 @@ void process_timers() {
     assert(node == &ent->node);
     // fprintf(stderr, "removing expired key: %s\n", ent->key.c_str());
     // delete the entry
-    entry_free(ent);
+    entry_del(ent);
     if (nworks++ >= k_max_works) {
       // dont stall the server if too many keys are expiring at once
       break;
