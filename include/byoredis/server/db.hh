@@ -22,7 +22,8 @@ struct GlobalData {
 };
 extern GlobalData g_data;
 
-size_t const k_large_container_size = 1000;  // threshold for background free
+// changed from 1000 to 10 just for testing
+size_t const k_large_container_size = 10;  // threshold for background free
 
 enum ENTRY_TYPE {
   T_INIT = 0,
