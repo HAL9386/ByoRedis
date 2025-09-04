@@ -19,6 +19,8 @@ struct GlobalData {
   std::vector<HeapItem> heap;
   // the thread pool for background tasks(free zset nodes)
   ThreadPool thread_pool;
+  // epoll instance fd
+  int epoll_fd = -1;
 };
 extern GlobalData g_data;
 

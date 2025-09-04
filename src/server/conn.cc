@@ -8,8 +8,23 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/epoll.h>
+
+static inline void epoll_update_interest(Conn *conn) {
+  if (g_data.epoll_fd < 0) return;
+  struct epoll_event ev = {};
+  ev.data.fd = conn->fd;
+  ev.events = EPOLLERR;
+  if (conn->want_read)  ev.events |= EPOLLIN;
+  if (conn->want_write) ev.events |= EPOLLOUT;
+  // best-effort; ignore errors if fd was already closed/removed
+  epoll_ctl(g_data.epoll_fd, EPOLL_CTL_MOD, conn->fd, &ev);
+}
 
 void conn_destroy(Conn *conn) {
+  if (g_data.epoll_fd >= 0 && conn->fd >= 0) {
+    epoll_ctl(g_data.epoll_fd, EPOLL_CTL_DEL, conn->fd, NULL);
+  }
   (void)close(conn->fd);
   g_data.fd2conn[conn->fd] = NULL;
   dlist_detach(&conn->idle_node);
@@ -45,6 +60,18 @@ int32_t handle_accept(int fd) {
   }
   assert(!g_data.fd2conn[conn->fd]);
   g_data.fd2conn[conn->fd] = conn;
+  // register to epoll
+  if (g_data.epoll_fd >= 0) {
+    struct epoll_event ev = {};
+    ev.data.fd = conn->fd;
+    ev.events = EPOLLIN | EPOLLERR; // initial interest
+    if (epoll_ctl(g_data.epoll_fd, EPOLL_CTL_ADD, conn->fd, &ev) < 0) {
+      msg_errno("epoll_ctl(ADD) failed");
+      // fallback: close the connection
+      conn_destroy(conn);
+      return -1;
+    }
+  }
   return 0;
 }
 
@@ -91,6 +118,7 @@ void handle_read(Conn *conn) {
     // try to write it without waiting for the next iteration.
     return handle_write(conn);
   } // else: want read
+  epoll_update_interest(conn);
 }
 
 // application callback when the socket is writable
@@ -98,6 +126,7 @@ void handle_write(Conn *conn) {
   assert(conn->outgoing.readable_size() > 0);
   ssize_t rv = write(conn->fd, conn->outgoing.readable_data(), conn->outgoing.readable_size());
   if (rv < 0 && errno == EAGAIN) {
+    epoll_update_interest(conn);
     return;  // actually not ready
   }
   if (rv < 0) {
@@ -113,6 +142,7 @@ void handle_write(Conn *conn) {
     conn->want_read = true;
     conn->outgoing.shrink_if_wasteful(1u << 20);
   } // else: want write
+  epoll_update_interest(conn);
 }
 
 static void response_begin(Buffer &buf) {

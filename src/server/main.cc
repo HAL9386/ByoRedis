@@ -7,8 +7,8 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <poll.h>
 #include <assert.h>
+#include <sys/epoll.h>
 
 #include "byoredis/common/log.hh"
 #include "byoredis/common/net.hh"
@@ -49,59 +49,43 @@ int main() {
     die("listen()");
   }
 
-  std::vector<struct pollfd> poll_args;
+  // create epoll instance
+  g_data.epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+  if (g_data.epoll_fd < 0) {
+    die("epoll_create1()");
+  }
+  struct epoll_event ev = {};
+  ev.data.fd = fd;
+  ev.events = EPOLLIN | EPOLLERR; // monitor listen socket for new connections
+  if (epoll_ctl(g_data.epoll_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+    die("epoll_ctl(ADD listen)");
+  }
+
+  std::vector<struct epoll_event> events(1024);
 
   // the event loop
   while (true) {
-    // prepare the arguments of the poll()
-    poll_args.clear();
-    // put the listening sockets in the first position
-    struct pollfd pfd = {
-      .fd      = fd,
-      .events  = POLLIN,  // want read
-      .revents = 0,
-    };
-    poll_args.push_back(pfd);
-    // the rest are connection sockets
-    for (Conn *conn : g_data.fd2conn) {
+    int32_t timeout_ms = next_timer_ms();
+    int n = epoll_wait(g_data.epoll_fd, events.data(), (int)events.size(), timeout_ms);
+    if (n < 0 && errno == EINTR) {
+      continue;  // not an error
+    }
+    if (n < 0) {
+      die("epoll_wait()");
+    }
+    for (int i = 0; i < n; i++) {
+      int evfd = events[i].data.fd;
+      uint32_t ready_mask = events[i].events;
+      if (evfd == fd) {
+        if (ready_mask & EPOLLIN) {
+          handle_accept(fd);
+        }
+        continue;
+      }
+      Conn *conn = (evfd >= 0 && (size_t)evfd < g_data.fd2conn.size()) ? g_data.fd2conn[evfd] : NULL;
       if (!conn) {
         continue;
       }
-      // always poll() for error
-      struct pollfd pfd = {
-        .fd      = conn->fd,
-        .events  = POLLERR,
-        .revents = 0,
-      };
-      // poll() flags from the application's intent
-      if (conn->want_read) {
-        pfd.events |= POLLIN;
-      }
-      if (conn->want_write) {
-        pfd.events |= POLLOUT;
-      }
-      poll_args.push_back(pfd);
-    }
-    // call poll(), wait for readiness
-    int32_t timeout_ms = next_timer_ms();
-    int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), timeout_ms);
-    if (rv < 0 && errno == EINTR) {
-      continue;  // not an error
-    }
-    if (rv < 0) {
-      die("poll()");
-    }
-    // handle the listening socket
-    if (poll_args[0].revents) {
-      handle_accept(fd);
-    }
-    // handle connection sockets
-    for (size_t i = 1; i < poll_args.size(); i++) {  // skip the 1st
-      uint32_t ready_mask = poll_args[i].revents;
-      if (ready_mask == 0) {
-        continue;
-      }
-      Conn *conn = g_data.fd2conn[poll_args[i].fd];
 
       // update the idle timer by moving conn to the end of the list
       conn->last_active_ms = get_monotonic_msec();
@@ -109,19 +93,19 @@ int main() {
       dlist_insert_before(&g_data.idle_list, &conn->idle_node);
 
       // handle IO
-      if (ready_mask & POLLIN) {
+      if (ready_mask & EPOLLIN) {
         assert(conn->want_read);
         handle_read(conn);  // application logic
       }
-      if (ready_mask & POLLOUT) {
+      if (ready_mask & EPOLLOUT) {
         assert(conn->want_write);
         handle_write(conn);  // application logic
       }
       // close the socket from socket error or application logic
-      if ((ready_mask & POLLERR) || conn->want_close) {
+      if ((ready_mask & (EPOLLERR | EPOLLHUP)) || conn->want_close) {
         conn_destroy(conn);
       }
-    } // for each connection socket
+    }
     // handle timers
     process_timers();
   } // the event loop
