@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <errno.h>
 
 static inline void epoll_update_interest(Conn *conn) {
   if (g_data.epoll_fd < 0) return;
@@ -33,44 +34,54 @@ void conn_destroy(Conn *conn) {
 
 // application callback when the listening socket is ready
 int32_t handle_accept(int fd) {
-  // accept
-  struct sockaddr_in client_addr = {};
-  socklen_t addr_len = sizeof(client_addr);
-  int connfd = accept(fd, (struct sockaddr *)&client_addr, &addr_len);
-  if (connfd < 0) {
-    msg_errno("accept() error");
-    return -1;
-  }
-  uint32_t ip = client_addr.sin_addr.s_addr;
-  fprintf(stderr, "new client from %u.%u.%u.%u:%u\n",
-    ip & 255, (ip >> 8) & 255, (ip >> 16) & 255, ip >> 24,
-    ntohs(client_addr.sin_port)
-  );
-  // set the new connection non-blocking
-  fd_set_nb(connfd);
-  // create a new connection object
-  Conn *conn = new Conn();
-  conn->fd = connfd;
-  conn->want_read = true;
-  conn->last_active_ms = get_monotonic_msec();
-  dlist_insert_before(&g_data.idle_list, &conn->idle_node);
-  // put it into the map
-  if (g_data.fd2conn.size() <= (size_t)conn->fd) {
-    g_data.fd2conn.resize(conn->fd + 1);
-  }
-  assert(!g_data.fd2conn[conn->fd]);
-  g_data.fd2conn[conn->fd] = conn;
-  // register to epoll
-  if (g_data.epoll_fd >= 0) {
-    struct epoll_event ev = {};
-    ev.data.fd = conn->fd;
-    ev.events = EPOLLIN | EPOLLERR; // initial interest
-    if (epoll_ctl(g_data.epoll_fd, EPOLL_CTL_ADD, conn->fd, &ev) < 0) {
-      msg_errno("epoll_ctl(ADD) failed");
-      // fallback: close the connection
-      conn_destroy(conn);
-      return -1;
+  int accepted = 0;
+  while (true) {
+    struct sockaddr_in client_addr = {};
+    socklen_t addr_len = sizeof(client_addr);
+    int connfd = accept(fd, (struct sockaddr *)&client_addr, &addr_len);
+    if (connfd < 0) {
+      if (errno == EINTR) {
+        continue; // retry
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        break; // drained
+      }
+      msg_errno("accept() error");
+      return accepted > 0 ? 0 : -1;
     }
+
+    uint32_t ip = client_addr.sin_addr.s_addr;
+    fprintf(stderr, "new client from %u.%u.%u.%u:%u\n",
+      ip & 255, (ip >> 8) & 255, (ip >> 16) & 255, ip >> 24,
+      ntohs(client_addr.sin_port)
+    );
+    // set the new connection non-blocking
+    fd_set_nb(connfd);
+    // create a new connection object
+    Conn *conn = new Conn();
+    conn->fd = connfd;
+    conn->want_read = true;
+    conn->last_active_ms = get_monotonic_msec();
+    dlist_insert_before(&g_data.idle_list, &conn->idle_node);
+    // put it into the map
+    if (g_data.fd2conn.size() <= (size_t)conn->fd) {
+      g_data.fd2conn.resize(conn->fd + 1);
+    }
+    assert(!g_data.fd2conn[conn->fd]);
+    g_data.fd2conn[conn->fd] = conn;
+    // register to epoll
+    if (g_data.epoll_fd >= 0) {
+      struct epoll_event ev = {};
+      ev.data.fd = conn->fd;
+      ev.events = EPOLLIN | EPOLLERR; // initial interest
+      if (epoll_ctl(g_data.epoll_fd, EPOLL_CTL_ADD, conn->fd, &ev) < 0) {
+        msg_errno("epoll_ctl(ADD) failed");
+        // fallback: close the connection and continue draining
+        conn_destroy(conn);
+        continue;
+      }
+    }
+    ++accepted;
   }
   return 0;
 }
